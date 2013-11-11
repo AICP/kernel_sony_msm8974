@@ -549,7 +549,21 @@ static void credit_entropy_bits(struct entropy_store *r, int nbits)
 		entropy_count = 0;
 	} else if (entropy_count > r->poolinfo->POOLBITS)
 		entropy_count = r->poolinfo->POOLBITS;
-	r->entropy_count = entropy_count;
+		
+	if (cmpxchg(&r->entropy_count, orig, entropy_count) != orig)
+		goto retry;
+
+	if (!r->initialized && nbits > 0) {
+		r->entropy_total += nbits;
+		if (r->entropy_total > 128) {
+			r->initialized = 1;
+			if (r == &nonblocking_pool)
+				prandom_reseed_late();
+		}
+	}
+
+	trace_credit_entropy_bits(r->name, nbits, entropy_count,
+				  r->entropy_total, _RET_IP_);
 
 	/* should we wake readers? */
 	if (r == &input_pool && entropy_count >= random_read_wakeup_thresh) {
