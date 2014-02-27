@@ -740,12 +740,6 @@ static struct mount *clone_mnt(struct mount *old, struct dentry *root,
 	else
 		mnt->mnt_group_id = old->mnt_group_id;
 
-	if (mnt) {
-		 if (flag & (CL_SLAVE | CL_PRIVATE | CL_SHARED_TO_SLAVE))
-			mnt->mnt_group_id = 0; /* not a peer of original */
-		else
-			mnt->mnt_group_id = old->mnt_group_id;
-
 		if ((flag & CL_MAKE_SHARED) && !mnt->mnt_group_id) {
 			int err = mnt_alloc_group_id(mnt);
 			if (err)
@@ -1483,9 +1477,9 @@ static int attach_recursive_mnt(struct mount *source_mnt,
 		if (err)
 			goto out;
 		err = propagate_mnt(dest_mnt, dest_dentry, source_mnt, &tree_list);
+		br_write_lock(&vfsmount_lock);
 		if (err)
 			goto out_cleanup_ids;
-		br_write_lock(&vfsmount_lock);
 		for (p = source_mnt; p; p = next_mnt(p, source_mnt))
 			set_mnt_shared(p);
 	} else {
@@ -1509,6 +1503,11 @@ static int attach_recursive_mnt(struct mount *source_mnt,
 	return 0;
 
  out_cleanup_ids:
+	while (!list_empty(&tree_list)) {
+		child = list_first_entry(&tree_list, struct mount, mnt_hash);
+		umount_tree(child, 0, &tree_list);
+	}
+	br_write_unlock(&vfsmount_lock);
 	cleanup_group_ids(source_mnt, NULL);
  out:
 	return err;
@@ -1845,7 +1844,7 @@ static int do_add_mount(struct mount *newmnt, struct path *path, int mnt_flags)
 {
 	int err;
 
-	mnt_flags &= ~(MNT_SHARED | MNT_WRITE_HOLD | MNT_INTERNAL);
+	mnt_flags &= ~MNT_INTERNAL_FLAGS;
 
 	err = lock_mount(path);
 	if (err)
