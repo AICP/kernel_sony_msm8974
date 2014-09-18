@@ -1175,9 +1175,17 @@ config MACH_FSM9XXX_SURF
 	  chipset based SURF evaluation board and
 	  FFA board.
 
+config MACH_SONY_SHINANO
+	depends on ARCH_MSM8974
+	bool "Sony Mobile Shinano"
+	help
+	  Support for the SONY Mobile Rhine board.
+	  It is based on QCOM MSM8974 AB chipset.
+
 config MACH_SONY_SIRIUS
 	depends on ARCH_MSM8974
 	bool "Sony Mobile Sirius"
+	select MACH_SONY_SHINANO
 	help
 	  Support for the SONY Mobile Sirius device.
 	  It is based on QCOM MSM8974 AB chipset.
@@ -1187,6 +1195,7 @@ config MACH_SONY_SIRIUS
 config MACH_SONY_CASTOR
 	depends on ARCH_MSM8974
 	bool "Sony Mobile Castor"
+	select MACH_SONY_SHINANO
 	help
 	  Support for the SONY Mobile Castor device.
 	  It is based on QCOM MSM8974 AB chipset.
@@ -1205,6 +1214,7 @@ config MACH_SONY_CASTOR_BRAZIL
 config MACH_SONY_CASTOR_WINDY
 	depends on ARCH_MSM8974
 	bool "Sony Mobile Castor Windy"
+	select MACH_SONY_SHINANO
 	help
 	  Support for the SONY Mobile Castor Windy device.
 	  It is based on QCOM APQ8074 AB chipset.
@@ -1223,6 +1233,7 @@ config MACH_SONY_CANOPUS
 config MACH_SONY_LEO
 	depends on ARCH_MSM8974
 	bool "Sony Mobile Leo"
+	select MACH_SONY_SHINANO
 	help
 	  Support for the SONY Mobile Leo device.
 	  It is based on QCOM MSM8974 AC chipset.
@@ -1241,6 +1252,7 @@ config MACH_SONY_LEO_DSDS
 config MACH_SONY_ARIES
 	depends on ARCH_MSM8974
 	bool "Sony Mobile Aries"
+	select MACH_SONY_SHINANO
 	help
 	  Support for the SONY Mobile Aries device.
 	  It is based on QCOM MSM8974 AC chipset.
@@ -1250,6 +1262,7 @@ config MACH_SONY_ARIES
 config MACH_SONY_SCORPION
 	depends on ARCH_MSM8974
 	bool "Sony Mobile Scorpion"
+	select MACH_SONY_SHINANO
 	help
 	  Support for the SONY Mobile Scorpion device.
 	  It is based on QCOM MSM8974 AC chipset.
@@ -1259,6 +1272,7 @@ config MACH_SONY_SCORPION
 config MACH_SONY_SCORPION_WINDY
 	depends on ARCH_MSM8974
 	bool "Sony Mobile Scorpion Windy"
+	select MACH_SONY_SHINANO
 	help
 	  Support for the SONY Mobile Scorpion Windy device.
 	  It is based on QCOM APQ8074 AC chipset.
