@@ -407,9 +407,9 @@ static void user_ion_handle_get(struct ion_handle *handle)
 	if (handle->user_ref_count++ == 0)
 		kref_get(&handle->ref);
 }
+
 /* Must hold the client lock */
-static struct ion_handle *user_ion_handle_get_check_overflow(
-	struct ion_handle *handle)
+static struct ion_handle *user_ion_handle_get_check_overflow(struct ion_handle *handle)
 {
 	if (handle->user_ref_count + 1 == 0)
 		return ERR_PTR(-EOVERFLOW);
@@ -427,18 +427,18 @@ static struct ion_handle *pass_to_user(struct ion_handle *handle)
 
 	mutex_lock(&client->lock);
 	ret = user_ion_handle_get_check_overflow(handle);
-	ion_handle_put(handle);
+	ion_handle_put_nolock(handle);
 	mutex_unlock(&client->lock);
-
 	return ret;
 }
 
-static int user_ion_handle_put(struct ion_handle *handle)
+/* Must hold the client lock */
+static int user_ion_handle_put_nolock(struct ion_handle *handle)
 {
-	int ret = 0;
+	int ret;
 
 	if (--handle->user_ref_count == 0)
-		ret = ion_handle_put(handle);
+		ret = ion_handle_put_nolock(handle);
 
 	return ret;
 }
@@ -661,6 +661,25 @@ static void ion_free_nolock(struct ion_client *client, struct ion_handle *handle
 	ion_handle_put_nolock(handle);
 }
 
+/* Must hold the client lock */
+static void user_ion_free_nolock(struct ion_client *client, struct ion_handle *handle)
+{
+	bool valid_handle;
+
+	BUG_ON(client != handle->client);
+
+	valid_handle = ion_handle_validate(client, handle);
+	if (!valid_handle) {
+		WARN(1, "%s: invalid handle passed to free.\n", __func__);
+		return;
+	}
+	if (handle->user_ref_count == 0) {
+		WARN(1, "%s: User does not have access!\n", __func__);
+		return;
+	}
+	user_ion_handle_put_nolock(handle);
+}
+
 void ion_free(struct ion_client *client, struct ion_handle *handle)
 {
 	BUG_ON(client != handle->client);
@@ -670,29 +689,6 @@ void ion_free(struct ion_client *client, struct ion_handle *handle)
 	mutex_unlock(&client->lock);
 }
 EXPORT_SYMBOL(ion_free);
-
-void user_ion_free(struct ion_client *client, struct ion_handle *handle)
-{
-	bool valid_handle;
-
-	BUG_ON(client != handle->client);
-
-	mutex_lock(&client->lock);
-	valid_handle = ion_handle_validate(client, handle);
-	if (!valid_handle) {
-		mutex_unlock(&client->lock);
-		WARN(1, "%s: invalid handle passed to free.\n", __func__);
-		return;
-	}
-	if (!handle->user_ref_count > 0) {
-		mutex_unlock(&client->lock);
-		WARN(1, "%s: User does not have access!\n", __func__);
-		return;
-	}
-	user_ion_handle_put(handle);
-	mutex_unlock(&client->lock);
-}
-EXPORT_SYMBOL(user_ion_free);
 
 int ion_phys(struct ion_client *client, struct ion_handle *handle,
 	     ion_phys_addr_t *addr, size_t *len)
@@ -1453,11 +1449,14 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		if (IS_ERR(handle))
 			return PTR_ERR(handle);
 
+		pass_to_user(handle);
 		data.handle = (ion_user_handle_t)handle->id;
 
 		if (copy_to_user((void __user *)arg, &data, sizeof(data))) {
-			ion_free(client, handle);
-			ion_handle_put(handle);
+			mutex_lock(&client->lock);
+			user_ion_free_nolock(client, handle);
+			ion_handle_put_nolock(handle);
+			mutex_unlock(&client->lock);
 			return -EFAULT;
 		}
 		ion_handle_put(handle);
@@ -1478,7 +1477,7 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			mutex_unlock(&client->lock);
 			return PTR_ERR(handle);
 		}
-		ion_free_nolock(client, handle);
+		user_ion_free_nolock(client, handle);
 		ion_handle_put_nolock(handle);
 		mutex_unlock(&client->lock);
 		break;
@@ -1511,10 +1510,15 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				   sizeof(struct ion_fd_data)))
 			return -EFAULT;
 		handle = ion_import_dma_buf(client, data.fd);
-		if (IS_ERR(handle))
+		if (IS_ERR(handle)) {
 			ret = PTR_ERR(handle);
-		else
-			data.handle = (ion_user_handle_t)handle->id;
+		} else {
+			handle = pass_to_user(handle);
+			if (IS_ERR(handle))
+				ret = PTR_ERR(handle);
+			else
+				data.handle = (ion_user_handle_t)handle->id;
+		}
 
 		if (copy_to_user((void __user *)arg, &data,
 				 sizeof(struct ion_fd_data)))
@@ -1558,6 +1562,7 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	}
 	return 0;
 }
+
 static int ion_release(struct inode *inode, struct file *file)
 {
 	struct ion_client *client = file->private_data;
