@@ -223,6 +223,13 @@ enum clearpad_chip_e {
 	SYN_CHIP_7500	= 0x39,
 };
 
+#ifdef CONFIG_MACH_SONY_RHINE
+enum synaptics_bootloader_id {
+	SYN_BOOTLOADER_ID_0 = 0,
+	SYN_BOOTLOADER_ID_1 = 1,
+};
+#endif
+
 static const char * const clearpad_task_name[] = {
 	[SYN_TASK_NONE]		= "none",
 	[SYN_TASK_NO_SUSPEND]	= "executing task",
@@ -1425,6 +1432,15 @@ static int clearpad_initialize(struct clearpad_t *this)
 					DEVICE_CONTROL_CONFIGURED);
 	if (rc)
 		goto exit;
+
+#ifdef CONFIG_MACH_SONY_RHINE
+	/* read synaptics chip type */
+	rc = clearpad_get_block(SYNF(this, F34_FLASH, QUERY, 0x00),
+			buf, sizeof(buf));
+	if (rc)
+		goto exit;
+    this->chip_id = buf[SYN_BOOTLOADER_ID_1];
+#endif
 
 	/* read device configuration */
 	rc = clearpad_get_block(SYNF(this, F01_RMI, QUERY, 0x00),
@@ -4253,11 +4269,13 @@ static int clearpad_touch_config_dt(struct clearpad_t *this)
 	int rc = 0;
 	struct device_node *devnode = this->bdata->of_node;
 
+#ifndef CONFIG_MACH_SONY_RHINE
 	if (of_property_read_u32(devnode, "chip_id", &this->chip_id)) {
 		dev_err(&this->pdev->dev, "no chip_id config\n");
 		rc = -EINVAL;
 		goto exit;
 	}
+#endif
 
 	if (of_property_read_u32(devnode, "gpio_reset",
 		&this->gpio_reset))
