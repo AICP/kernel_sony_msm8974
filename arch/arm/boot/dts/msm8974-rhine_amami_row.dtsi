@@ -55,7 +55,6 @@
 			touch_vdd-supply = <&pm8941_l22>;
 			touch_vio-supply = <&pm8941_s3>;
 			synaptics,irq_gpio = <&msmgpio 61 0x00>;
-			chip_id = <0x35>;
 			num_sensor_rx = <20>;
 			num_sensor_tx = <10>;
 			charger_supported = <0>;
