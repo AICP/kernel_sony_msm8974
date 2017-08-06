@@ -59,7 +59,6 @@
 			touch_vdd-supply = <&pm8941_l22>;
 			touch_vio-supply = <&pm8941_s3>;
 			synaptics,irq_gpio = <&msmgpio 61 0x00>;
-			chip_id = <0x36>;
 			num_sensor_rx = <28>;
 			num_sensor_tx = <15>;
 			charger_supported = <0>;
@@ -1203,6 +1202,10 @@
 			status = "disabled";
 		};
 	};
+};
+
+&sdhc_1 {
+	qcom,bus-speed-mode = "DDR_1p8v";
 };
 
 &sdhc_2 {
