@@ -522,6 +522,26 @@ config TOUCHSCREEN_CLEARPAD_RMI_DEV
         help
           Say Y here to enable Synaptics ClearPad RMI dev.
 
+config TOUCHSCREEN_CLEARPAD_RHINE
+        tristate "Synaptics ClearPad for Rhine"
+	default n
+        help
+          Say Y here to enable Synaptics ClearPad touchscreen.
+
+config TOUCHSCREEN_CLEARPAD_I2C_RHINE
+        tristate "Synaptics ClearPad I2C for Rhine"
+	depends on I2C && TOUCHSCREEN_CLEARPAD_RHINE
+	default n
+        help
+          Say Y here to enable Synaptics ClearPad I2C touchscreen.
+
+config TOUCHSCREEN_CLEARPAD_RMI_DEV_RHINE
+        tristate "Synaptics ClearPad RMI Dev for Rhine"
+	depends on GPIO_SYSFS && TOUCHSCREEN_CLEARPAD_RHINE && TOUCHSCREEN_CLEARPAD_I2C_RHINE
+	default n
+        help
+          Say Y here to enable Synaptics ClearPad RMI dev.
+
 config TOUCHSCREEN_MAX1187X
 	tristate "Maxim max1187x Touchscreen"
 	depends on I2C
