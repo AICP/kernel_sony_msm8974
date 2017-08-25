@@ -21,9 +21,6 @@
 #include <linux/tick.h>
 #include <linux/stop_machine.h>
 
-extern ktime_t ntp_get_next_leap(void);
-extern int __do_adjtimex(struct timex *);
-
 /* Structure holding internal timekeeping values. */
 struct timekeeper {
 	/* Current clocksource used for timekeeping. */
@@ -33,8 +30,6 @@ struct timekeeper {
 	/* The shift value of the current clocksource. */
 	int	shift;
 
-	/* CLOCK_MONOTONIC time value of a pending leap-second*/
-	ktime_t	next_leap_ktime;
 	/* Number of clock cycles in one NTP interval. */
 	cycle_t cycle_interval;
 	/* Number of clock shifted nano seconds in one NTP interval. */
@@ -177,25 +172,6 @@ static inline s64 timekeeping_get_ns_raw(void)
 	return clocksource_cyc2ns(cycle_delta, clock->mult, clock->shift);
 }
 
-static void update_rt_offset(void)
-{
-	struct timespec tmp, *wtm = &timekeeper.wall_to_monotonic;
-
-	set_normalized_timespec(&tmp, -wtm->tv_sec, -wtm->tv_nsec);
-	timekeeper.offs_real = timespec_to_ktime(tmp);
-}
-
-/*
- *   tk_update_leap_state - helper to update the next_leap_ktime
- */
-static inline void tk_update_leap_state(struct timekeeper *tk)
-{
-	tk->next_leap_ktime = ntp_get_next_leap();
-	if (tk->next_leap_ktime.tv64 != KTIME_MAX)
-		/* Convert to monotonic time */
-		tk->next_leap_ktime = ktime_sub(tk->next_leap_ktime, tk->offs_real);
-}
-
 /* must hold write on timekeeper.lock */
 static void timekeeping_update(bool clearntp)
 {
@@ -203,8 +179,6 @@ static void timekeeping_update(bool clearntp)
 		timekeeper.ntp_error = 0;
 		ntp_clear();
 	}
-	tk_update_leap_state(&timekeeper);
-	update_rt_offset();
 	update_vsyscall(&timekeeper.xtime, &timekeeper.wall_to_monotonic,
 			 timekeeper.clock, timekeeper.mult);
 }
@@ -1318,46 +1292,6 @@ void get_xtime_and_monotonic_and_sleep_offset(struct timespec *xtim,
 	} while (read_seqretry(&timekeeper.lock, seq));
 }
 
-#ifdef CONFIG_HIGH_RES_TIMERS
-/**
- * ktime_get_update_offsets - hrtimer helper
- * @offs_real:	pointer to storage for monotonic -> realtime offset
- * @offs_boot:	pointer to storage for monotonic -> boottime offset
- *
- * Returns current monotonic time and updates the offsets
- * Called from hrtimer_interupt() or retrigger_next_event()
- */
-ktime_t ktime_get_update_offsets(ktime_t *offs_real, ktime_t *offs_boot)
-{
-	ktime_t now;
-	unsigned int seq;
-	u64 secs, nsecs;
-
-	do {
-		seq = read_seqbegin(&timekeeper.lock);
-
-		secs = timekeeper.xtime.tv_sec;
-		nsecs = timekeeper.xtime.tv_nsec;
-		nsecs += timekeeping_get_ns();
-		/* If arch requires, add in gettimeoffset() */
-		nsecs += arch_gettimeoffset();
-
-		*offs_real = timekeeper.offs_real;
-		*offs_boot = timekeeper.offs_boot;
-
-		now = ktime_add_ns(ktime_set(secs, 0), nsecs);
-		now = ktime_sub(now, *offs_real);
-
-		/* Handle leapsecond insertion adjustments */
-		if (unlikely(now.tv64 >= timekeeper.next_leap_ktime.tv64))
-			*offs_real = ktime_sub(timekeeper.offs_real, ktime_set(1, 0));
-
-	} while (read_seqretry(&timekeeper.lock, seq));
-
-	return now;
-}
-#endif
-
 /**
  * ktime_get_monotonic_offset() - get wall_to_monotonic in ktime_t format
  */
@@ -1375,16 +1309,6 @@ ktime_t ktime_get_monotonic_offset(void)
 }
 EXPORT_SYMBOL_GPL(ktime_get_monotonic_offset);
 
-/*
- * do_adjtimex() - Accessor function to NTP __do_adjtimex function
- */
-int do_adjtimex(struct timex *txc)
-{
-	int ret;
-	ret = __do_adjtimex(txc);
-	tk_update_leap_state(&timekeeper);
-	return ret;
-}
 
 /**
  * xtime_update() - advances the timekeeping infrastructure
