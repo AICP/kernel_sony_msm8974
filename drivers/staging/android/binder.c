@@ -4159,9 +4159,6 @@ static int binder_proc_show(struct seq_file *m, void *unused)
 
 	if (do_lock)
 		binder_lock(__func__);
-	seq_puts(m, "binder proc state:\n");
-	print_binder_proc(m, proc, 1);
-
 
 	hlist_for_each_entry(itr, pos, &binder_procs, proc_node) {
 		if (itr->pid == pid) {
