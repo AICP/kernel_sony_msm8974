@@ -776,7 +776,6 @@ static struct mount *clone_mnt(struct mount *old, struct dentry *root,
 			if (!list_empty(&old->mnt_expire))
 				list_add(&mnt->mnt_expire, &old->mnt_expire);
 		}
-	}
 	return mnt;
 
  out_free:
