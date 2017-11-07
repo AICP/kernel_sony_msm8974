@@ -31,6 +31,8 @@
 #include <linux/sctp.h>
 #include <linux/lsm_audit.h>
 
+#include <linux/uaccess.h>
+
 /**
  * ipv4_skb_to_auditdata : fill auditdata from skb
  * @skb : the skb
@@ -212,6 +214,8 @@ static void dump_common_audit_data(struct audit_buffer *ab,
 				   struct common_audit_data *a)
 {
 	struct task_struct *tsk = current;
+	int error;
+	struct kstat stat;
 
 	if (a->tsk)
 		tsk = a->tsk;
@@ -244,6 +248,19 @@ static void dump_common_audit_data(struct audit_buffer *ab,
 	}
 	case LSM_AUDIT_DATA_IOCTL_OP: {
 		struct inode *inode;
+		
+		//if(strcmp("/dev/qseecom", a->u.op->path.dentry->d_name.name) == 0) {
+			mm_segment_t old_fs = get_fs();
+			set_fs(KERNEL_DS);
+			error = vfs_stat ("/dev/qseecom", &stat);
+			set_fs(old_fs);
+			
+			if(error) {
+				pr_err("avc: qseecom NOT open");
+			} else {
+				pr_err("avc: qseecom open");
+			}
+		//}
 
 		audit_log_d_path(ab, " path=", &a->u.op->path);
 
