@@ -1078,9 +1078,17 @@ static void dsi_pll_software_reset(void)
 	 * reset bit off and back on.
 	 */
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_TEST_CFG, 0x01);
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+	udelay(1000);
+#else
 	udelay(1);
+#endif
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_TEST_CFG, 0x00);
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+	udelay(1000);
+#else
 	udelay(1);
+#endif
 }
 
 static int dsi_pll_enable_seq_m(void)
@@ -1258,22 +1266,45 @@ static int dsi_pll_enable_seq_8974(void)
 	 * Add necessary delays recommeded by hardware.
 	 */
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x01);
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+	udelay(1000);
+#else
 	udelay(1);
+#endif
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x05);
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+	udelay(1000);
+#else
 	udelay(200);
+#endif
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x07);
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+	udelay(1000);
+#else
 	udelay(500);
+#endif
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x0f);
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+	udelay(1000);
+#else
 	udelay(500);
+#endif
 
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+	for (i = 0; i < 3; i++) {
+#else
 	for (i = 0; i < 2; i++) {
 		udelay(100);
+#endif
 		/* DSI Uniphy lock detect setting */
 		DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_LKDET_CFG2,
 			0x0c);
 		udelay(100);
 		DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_LKDET_CFG2,
 			0x0d);
+#ifndef CONFIG_MACH_SONY_AMAMI_ROW
+		udelay(500);
+#endif
 		/* poll for PLL ready status */
 		max_reads = 5;
 		timeout_us = 100;
@@ -1296,17 +1327,41 @@ static int dsi_pll_enable_seq_8974(void)
 		 * Add necessary delays recommeded by hardware.
 		 */
 		DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x1);
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+		udelay(1000);
+#else
 		udelay(1);
+#endif
 		DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x5);
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+		udelay(1000);
+#else
 		udelay(200);
+#endif
 		DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x7);
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+		udelay(1000);
+#else
 		udelay(250);
+#endif
 		DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x5);
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+		udelay(1000);
+#else
 		udelay(200);
+#endif
 		DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0x7);
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+		udelay(1000);
+#else
 		udelay(500);
+#endif
 		DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_GLB_CFG, 0xf);
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+		udelay(2000);
+#else
 		udelay(500);
+#endif
 
 	}
 
@@ -1481,7 +1536,11 @@ static int vco_set_rate(struct clk *c, unsigned long rate)
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_SDM_CFG4, 0x00);
 
 	/* Add hardware recommended delay for correct PLL configuration */
+#ifdef CONFIG_MACH_SONY_AMAMI_ROW
+	udelay(1000);
+#else
 	udelay(1);
+#endif
 
 	DSS_REG_W(mdss_dsi_base, DSI_0_PHY_PLL_UNIPHY_PLL_REFCLK_CFG,
 		(u32)refclk_cfg);
