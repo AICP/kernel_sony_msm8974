@@ -1441,24 +1441,8 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		handle = ion_alloc(client, data.len, data.align,
 					     data.heap_mask, data.flags);
 
-		if (IS_ERR(data.handle))
-			return PTR_ERR(data.handle);
-
-		pass_to_user(data.handle);
-		if (copy_to_user((void __user *)arg, &data, sizeof(data))) {
-			user_ion_free(client, data.handle);
-			return -EFAULT;
-		}
-		break;
-	}
-	case ION_IOC_ALLOC_COMPAT:
-	{
-		struct ion_allocation_data_compat data;
-
-		if (copy_from_user(&data, (void __user *)arg, sizeof(data)))
-			return -EFAULT;
-		data.handle = ion_alloc(client, data.len, data.align,
-					     data.flags, data.flags);
+		if (IS_ERR(handle))
+			return PTR_ERR(handle);
 
 		data.handle = (ion_user_handle_t)handle->id;
 
@@ -1486,10 +1470,6 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		ion_free_nolock(client, handle);
 		ion_handle_put_nolock(handle);
 		mutex_unlock(&client->lock);
-		
-		if (!valid)
-			return -EINVAL;
-		user_ion_free(client, data.handle);
 		break;
 	}
 	case ION_IOC_SHARE:
@@ -1519,15 +1499,12 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		if (copy_from_user(&data, (void __user *)arg,
 				   sizeof(struct ion_fd_data)))
 			return -EFAULT;
-		data.handle = ion_import_dma_buf(client, data.fd);
-		if (IS_ERR(data.handle)) {
-			ret = PTR_ERR(data.handle);
-			data.handle = NULL;
-		} else {
-			data.handle = pass_to_user(data.handle);
-			if (IS_ERR(data.handle))
-				ret = PTR_ERR(data.handle);
-		}
+		handle = ion_import_dma_buf(client, data.fd);
+		if (IS_ERR(handle))
+			ret = PTR_ERR(handle);
+		else
+			data.handle = (ion_user_handle_t)handle->id;
+
 		if (copy_to_user((void __user *)arg, &data,
 				 sizeof(struct ion_fd_data)))
 			return -EFAULT;
@@ -1570,7 +1547,6 @@ static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	}
 	return 0;
 }
-
 static int ion_release(struct inode *inode, struct file *file)
 {
 	struct ion_client *client = file->private_data;
