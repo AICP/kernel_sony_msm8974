@@ -2826,6 +2826,10 @@ static ssize_t wcnss_wlan_write(struct file *fp, const char __user
 	return rc;
 }
 
+static int wcnss_node_release(struct inode *inode, struct file *file)
+{
+	return 0;
+}
 
 static int wcnss_notif_cb(struct notifier_block *this, unsigned long code,
 				void *ss_handle)
