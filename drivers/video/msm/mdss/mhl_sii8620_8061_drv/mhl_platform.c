@@ -1,7 +1,6 @@
 /* kernel/drivers/video/msm/mdss/mhl_sii8620_8061_drv/mhl_platform.c
  *
- * Copyright (C) 2013 Sony Mobile Communications AB.
- * Copyright (C) 2013 Silicon Image Inc.
+ * Copyright (c) 2014 Sony Mobile Communications Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2, as
@@ -15,17 +14,11 @@
 #include <linux/err.h>
 #include <linux/of_gpio.h>
 #include <linux/delay.h>
-#include <linux/slab.h>
+#include <linux/i2c.h>
 
 #include "mhl_platform.h"
-#include "mhl_sii8620_8061_device.h"
-#include "mhl_common.h"
-#include "si_8620_regs.h"
-#include "mhl_tx.h"
-#include "mhl_lib_timer.h"
-#include "mhl_cbus_control.h"
 
-static struct clk *mhl_clk;
+struct clk *mhl_clk;
 
 static enum {
 	CHIP_PWR_ON,
@@ -35,9 +28,6 @@ static enum {
 /*device name*/
 static const char *device_name;
 
-/*device*/
-static struct device *pdev;
-
 static int mhl_pf_clock_enable(void);
 static void mhl_pf_clock_disable(void);
 
@@ -46,11 +36,13 @@ int is_interrupt_asserted(void)
 	int int_gpio = mhl_pf_get_gpio_num_int();
 	return gpio_get_value(int_gpio) ? 0 : 1;
 }
+EXPORT_SYMBOL(is_interrupt_asserted);
 
 const char *mhl_pf_get_device_name(void)
 {
 	return device_name;
 }
+EXPORT_SYMBOL(mhl_pf_get_device_name);
 
 /*
  * Return a value indicating how upstream HPD is
@@ -60,6 +52,7 @@ hpd_control_mode platform_get_hpd_control_mode(void)
 {
 	return HPD_CTRL_PUSH_PULL;
 }
+EXPORT_SYMBOL(platform_get_hpd_control_mode);
 
 bool mhl_pf_is_chip_power_on(void)
 {
@@ -68,6 +61,7 @@ bool mhl_pf_is_chip_power_on(void)
 	else
 		return false;
 }
+EXPORT_SYMBOL(mhl_pf_is_chip_power_on);
 
 void mhl_pf_chip_power_on(void)
 {
@@ -112,13 +106,12 @@ void mhl_pf_chip_power_on(void)
 	gpio_set_value(rst_gpio, 1);
 
 	/* Active Power Control, then go into D2 mode */
-	mhl_pf_write_reg(REG_PAGE_0_DPD, 0xFE);
+	mhl_pf_write_reg(REG_DPD, 0xFE);
 
 	/* NOTE : following power ctrl is not enough to access i2c. */
-	/* mhl_pf_write_reg(REG_PAGE_0_DPD, 0x10); */
-
-
+	/* mhl_pf_write_reg(REG_DPD, 0x10); */
 }
+EXPORT_SYMBOL(mhl_pf_chip_power_on);
 
 
 void mhl_pf_chip_power_off(void)
@@ -130,7 +123,7 @@ void mhl_pf_chip_power_off(void)
 	pr_debug("%s()\n", __func__);
 
 	/* device goes into low power mode */
-	mhl_pf_write_reg(REG_PAGE_0_DPD, 0x10);
+	mhl_pf_write_reg(REG_DPD, 0x10);
 
 	/* de-assert FW_WAKE */
 	fw_wake_gpio = mhl_pf_get_gpio_num_fw_wake();
@@ -153,20 +146,30 @@ void mhl_pf_chip_power_off(void)
 	chip_pwr_state = CHIP_PWR_OFF;
 
 }
+EXPORT_SYMBOL(mhl_pf_chip_power_off);
 
 static int mhl_pf_clock_enable(void)
 {
 	int rc = -1;
+	struct mhl_tx_ctrl *mhl_ctrl;
+	struct i2c_client *client;
 
 	pr_debug("%s()\n", __func__);
 
+	client = mhl_pf_get_i2c_client();
+	if (!client) {
+		pr_err("%s: cannot get i2c_client\n", __func__);
+		return -EBUSY;
+	}
 
-	if (!pdev)
+	mhl_ctrl = i2c_get_clientdata(client);
+
+	if (!mhl_ctrl->pdev)
 		return -EBUSY;
 
 	mhl_clk = mhl_pf_get_mhl_clk();
 	if (!mhl_clk) {
-		mhl_clk = clk_get(pdev, "");
+		mhl_clk = clk_get(mhl_ctrl->pdev, "");
 		if (!mhl_clk) {
 			pr_err("%s: mhl clk is null\n", __func__);
 			return -EBUSY;
@@ -176,6 +179,7 @@ static int mhl_pf_clock_enable(void)
 	rc = clk_prepare(mhl_clk);
 	if (rc) {
 		pr_err("%s: invalid clk prepare, rc : %d\n", __func__, rc);
+		mhl_clk = NULL;
 		return -EBUSY;
 	}
 
@@ -191,10 +195,11 @@ static void mhl_pf_clock_disable(void)
 	if (mhl_clk) {
 		clk_disable_unprepare(mhl_clk);
 		pr_debug("%s:clk is disabled\n", __func__);
+		mhl_clk = NULL;
 	}
 }
 
-static int __init mhl_pf_init(void)
+int mhl_pf_init(void)
 {
 	struct mhl_tx_ctrl *mhl_ctrl;
 	int rc = -1;
@@ -218,38 +223,24 @@ static int __init mhl_pf_init(void)
 		goto failed_no_mem;
 	}
 
-	pdev = &client->dev;
-	if (!pdev) {
-		pr_err("%s: FAILED: cannot get pdev\n", __func__);
+	mhl_ctrl->i2c_handle = client;
+	mhl_ctrl->mhlclass = class_create(THIS_MODULE, "mhl");
+
+	if (IS_ERR(mhl_ctrl->mhlclass)) {
+		pr_err("%s:fail class creation\n", __func__);
+		rc = PTR_ERR(mhl_ctrl->mhlclass);
 		goto failed_error;
 	}
 
-	pdev->class = class_create(THIS_MODULE, "mhl");
-	if (IS_ERR(pdev->class)) {
-		pr_err("%s:fail class creation\n", __func__);
-		rc = PTR_ERR(pdev->class);
-		goto failed_error;
-	}
-	pr_debug("%s:class name : %s\n", __func__, pdev->class->name);
+	mhl_ctrl->pdev = device_create(mhl_ctrl->mhlclass,
+				NULL, 0, NULL, "hdcp_state");
+
+	pr_debug("%s:class name : %s\n", __func__, mhl_ctrl->pdev->class->name);
 	i2c_set_clientdata(client, mhl_ctrl);
 
 	mhl_pf_i2c_init(client->adapter);
 	device_name = client->dev.driver->name;
 	pr_debug("%s:device name : %s\n", __func__, device_name);
-
-	/*
-	 * libs should be initizlized first
-	 * since there could be used by other module
-	 */
-	rc = mhl_lib_timer_init();
-	if (rc < 0)
-		goto failed_error;
-
-	mhl_device_initialize(&client->dev);
-	mhl_tx_rcp_init(pdev);
-	rc = mhl_tx_initialize();
-	if (rc < 0)
-		goto failed_error;
 
 	return 0;
 
@@ -264,7 +255,7 @@ failed_i2c_get_error:
 	return rc;
 }
 
-static void __exit mhl_pf_exit(void)
+void mhl_pf_exit(void)
 {
 	struct mhl_tx_ctrl *mhl_ctrl;
 	struct i2c_client *client;
@@ -288,23 +279,13 @@ static void __exit mhl_pf_exit(void)
 		clk_disable_unprepare(mhl_clk);
 		clk_put(mhl_clk);
 	}
-	mhl_tx_rcp_release();
 	mhl_pf_switch_to_usb();
-	mhl_device_release(&client->dev);
-	mhl_tx_release();
-	/* libs should be release at the end
-	 * since there could be used by other sw module */
-	mhl_lib_timer_release();
 
 	/* mhl device class is released */
-	class_destroy(client->dev.class);
+	class_destroy(mhl_ctrl->mhlclass);
 
 	if (!mhl_ctrl)
 		pr_err("%s: i2c get client data failed\n", __func__);
 	else
 		devm_kfree(&client->dev, mhl_ctrl);
 }
-
-module_init(mhl_pf_init);
-module_exit(mhl_pf_exit);
-MODULE_LICENSE("GPL");
